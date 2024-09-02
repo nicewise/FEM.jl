@@ -1,4 +1,21 @@
-"""
+@doc raw"""
+```
+                                       .t1
+                   .AbstractBond      /
+                  /       .triangular.
+                 .       /            \
+                | .Cell2.              .t2
+                |/       \
+AbstractCellType...       .quadrilateral.--q1
+                 \ \
+                  \  .AbstractBeam
+                   \
+                    \         .Tetrahedral.--T1
+                     \       /
+                      .Cell3.
+                             \
+                              .Hexahedral.--H1
+```
 定义了：
 - 三角形： triangle
 - 四边形： quadrilateral

@@ -1,10 +1,12 @@
 """
-'''julia
+```julia
 import Pardiso
-'''
+```
+```
 ps = Pardiso.MKLPardisoSolver:
 	Matrix type: Real nonsymmetric
 	Phase: Analysis, numerical factorization, solve, iterative refinement
+```
 """
 struct MKLSolver <: AbstractSolver
     ps
@@ -21,9 +23,9 @@ function solveit(solver::MKLSolver, A, b)
 end
 
 """
-'''julia
+```julia
 import LinearSolve
-'''
+```
 and other packages solver needs
 """
 struct LinearSolveDotjl <: AbstractSolver
@@ -36,9 +38,9 @@ function solveit(solver::LinearSolveDotjl, A, b)
 end
 
 """
-'''julia
+```julia
 import SymRCM
-'''
+```
 """
 struct reorder_and_slash <: AbstractSolver end
 function solveit(solver::reorder_and_slash, A, b)
