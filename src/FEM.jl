@@ -30,7 +30,10 @@ export
     AbstractRecorder
 
 include("MandelNotation.jl")
-export  Mandel # some constant tensor
+export
+    Mandel, # some constant tensor
+    ⊗,
+    ⋆
 
 include("mesh.jl")
 export
@@ -45,7 +48,8 @@ export
 
 include("quadrature.jl")
 export
-    quad_form
+    quad_form,
+    sphere_quad
 
 include("linear_elastic_fem.jl")
 export
@@ -77,9 +81,8 @@ export
     Rd_gen,
     Rd,
     elastic_damage,
-    gradient_elastic_damage,
-    before_gradient!,
-    after_gradient!
+    AEDDELUTE,
+    AEDPCW
 
 include("solvers.jl")
 

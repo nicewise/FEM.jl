@@ -1,34 +1,68 @@
 # MandelNotation.jl
 # encoding: utf-8
 
+function ⊗(a::SVector{3}, b::SVector{3}; symmetric::Bool = false)
+    if symmetric
+        return (a ⊗ b + b ⊗ a) / 2
+    else
+        return @SVector [
+            a[1] * b[1],
+            a[2] * b[2],
+            a[3] * b[3],
+            a[2] * b[3] * √2,
+            a[3] * b[1] * √2,
+            a[1] * b[2] * √2
+        ]
+    end
+end
+
+function ⊗(A::SVector{6}, B::SVector{6}; symmetric::Bool = false)
+    if symmetric
+        c = [1, 1, 1, √2, √2, √2]
+        a = A ./ c
+        b = B ./ c
+        o = [
+            a[1]*b[1] a[6]*b[6] a[5]*b[5] a[6]*b[5] a[5]*b[1] a[1]*b[6]
+            a[6]*b[6] a[2]*b[2] a[4]*b[4] a[2]*b[4] a[4]*b[6] a[6]*b[2]
+            a[5]*b[5] a[4]*b[4] a[3]*b[3] a[4]*b[3] a[3]*b[5] a[5]*b[4]
+            a[6]*b[5] a[2]*b[4] a[4]*b[3] a[2]*b[3] a[4]*b[5] a[6]*b[4]
+            a[5]*b[1] a[4]*b[6] a[3]*b[5] a[4]*b[5] a[3]*b[1] a[5]*b[6]
+            a[1]*b[6] a[6]*b[2] a[5]*b[4] a[6]*b[4] a[5]*b[6] a[1]*b[2]
+        ] + [
+            a[1]*b[1] a[6]*b[6] a[5]*b[5] a[5]*b[6] a[1]*b[5] a[6]*b[1]
+            a[6]*b[6] a[2]*b[2] a[4]*b[4] a[4]*b[2] a[6]*b[4] a[2]*b[6]
+            a[5]*b[5] a[4]*b[4] a[3]*b[3] a[3]*b[4] a[5]*b[3] a[4]*b[5]
+            a[6]*b[5] a[2]*b[4] a[4]*b[3] a[4]*b[4] a[6]*b[3] a[2]*b[5]
+            a[5]*b[1] a[4]*b[6] a[3]*b[5] a[3]*b[6] a[5]*b[5] a[4]*b[1]
+            a[1]*b[6] a[6]*b[2] a[5]*b[4] a[5]*b[2] a[1]*b[4] a[6]*b[6]
+        ]
+        o ./= 2
+        o[:, 4:6] .*= √2
+        o[4:6, :] .*= √2
+        return SMatrix{6, 6}(o)
+    else
+        return A * B'
+    end
+end
+⋆(A::SVector{6}, B::SVector{6}) = ⊗(A, B, symmetric = true) # ⊗s
+
 struct MandelNotation
-    δ::SVector{6, Float64}
-    I::SMatrix{6, 6, Float64}
+    δ::SVector{6}
+    I::SMatrix{6, 6}
     J::SMatrix{6, 6, Float64}
     K::SMatrix{6, 6, Float64}
 
     function MandelNotation()
-        δ = @SVector [1.0, 1, 1, 0, 0, 0]
-        I = @SMatrix [ 1  0  0  0  0  0.0
+        δ = @SVector [1, 1, 1, 0, 0, 0]
+        # I = δ ⊗s δ, 但我不想让它变成浮点数矩阵
+        I = @SMatrix [ 1  0  0  0  0  0
                        0  1  0  0  0  0
                        0  0  1  0  0  0
                        0  0  0  1  0  0
                        0  0  0  0  1  0
                        0  0  0  0  0  1 ]
-        #J = δ*δ'/3
-        #K = I - J
-        J = SMatrix{6, 6}([ 1  1  1  0  0  0.0
-                            1  1  1  0  0  0
-                            1  1  1  0  0  0
-                            0  0  0  0  0  0
-                            0  0  0  0  0  0
-                            0  0  0  0  0  0 ] / 3)
-        K = SMatrix{6, 6}([ 2 -1 -1  0  0  0.0
-                           -1  2 -1  0  0  0
-                           -1 -1  2  0  0  0
-                            0  0  0  3  0  0
-                            0  0  0  0  3  0
-                            0  0  0  0  0  3] / 3)
+        J = δ ⊗ δ / 3
+        K = I - J
         return new(δ, I, J, K)
     end
 end
@@ -67,7 +101,8 @@ U_{3311}&U_{3322}&U_{3333}&\sqrt{2}U_{3323}&\sqrt{2}U_{3331}&\sqrt{2}U_{3312}\\
 \end{bmatrix}
 ```
 ```math
-I = \frac{1}{2} (\delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk}) e_i\otimes e_j\otimes e_k\otimes e_l
+I = \delta \otimes^s \delta
+  = \frac{1}{2} (\delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk}) e_i\otimes e_j\otimes e_k\otimes e_l
   = \begin{bmatrix}
    1& 0& 0& 0& 0& 0\\
    0& 1& 0& 0& 0& 0\\
@@ -78,7 +113,8 @@ I = \frac{1}{2} (\delta_{ik} \delta_{jl} + \delta_{il} \delta_{jk}) e_i\otimes e
 \end{bmatrix}
 ```
 ```math
-J = \frac{1}{3} \delta_{ij} \delta_{kl}
+J = \frac{1}{3} \delta \otimes \delta
+  = \frac{1}{3} \delta_{ij} \delta_{kl}
   = \frac{1}{3}\begin{bmatrix}
    1& 1& 1& 0& 0& 0\\
    1& 1& 1& 0& 0& 0\\
@@ -90,8 +126,25 @@ J = \frac{1}{3} \delta_{ij} \delta_{kl}
 ```
 ```math
 K = I - J
+  = \frac{1}{3}\begin{bmatrix}
+    2& -1& -1& 0& 0& 0\\
+   -1&  2& -1& 0& 0& 0\\
+   -1& -1&  2& 0& 0& 0\\
+    0&  0&  0& 3& 0& 0\\
+    0&  0&  0& 0& 3& 0\\
+    0&  0&  0& 0& 0& 3
+\end{bmatrix}
 ```
 ```jldoctest
+julia> Mandel.J
+6×6 StaticArraysCore.SMatrix{6, 6, Float64, 36} with indices SOneTo(6)×SOneTo(6):
+ 0.333333  0.333333  0.333333  0.0  0.0  0.0
+ 0.333333  0.333333  0.333333  0.0  0.0  0.0
+ 0.333333  0.333333  0.333333  0.0  0.0  0.0
+ 0.0       0.0       0.0       0.0  0.0  0.0
+ 0.0       0.0       0.0       0.0  0.0  0.0
+ 0.0       0.0       0.0       0.0  0.0  0.0
+
 julia> Mandel.K
 6×6 StaticArraysCore.SMatrix{6, 6, Float64, 36} with indices SOneTo(6)×SOneTo(6):
   0.666667  -0.333333  -0.333333  0.0  0.0  0.0
