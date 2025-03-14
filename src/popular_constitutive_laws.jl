@@ -340,7 +340,7 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
     n::Int # 代表性裂隙族数量，ie. 球面积分高斯点数目
     cracks::Vector{MicroCrack}
     C0::SMatrix{6, 6, Float64}
-    Tr::Dict # FIXME
+    Tr_gen::Function
     Pd::SMatrix{6, 6, Float64}
     isopen::Function
     Rd::AbstractRd
@@ -358,43 +358,26 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
         k3 = E / (1 - 2ν)
         μ2 = E / (1 + ν)
         C0 = k3 * Mandel.J + μ2 * Mandel.K
-        Tr = Dict(
-            true => c -> C0 * (cn * c.E2 + ct * c.E4) * C0 * c.ω,
-            false => c -> C0 * ct * c.E4 * C0 * c.ω
-        ) # c -- > crack
+        Tr_gen(crack::MicroCrack, key::Bool) = C0 * Sn(crack, key, cn, ct) * C0 * crack.ω
         αk = 1 / (k3 + 2μ2)
         αμ = (2k3 + 6μ2) / 5(k3 + 2μ2) / μ2
         Pd = αk * Mandel.J + αμ * Mandel.K
         isopen = σ -> [σ' * crack.N for crack in cracks] .>= 0 # σ -> vector{Bool}
-        return new{T}(l, x, y, n, cracks, C0, Tr, Pd, isopen, Rd, tol)
+        return new{T}(l, x, y, n, cracks, C0, Tr_gen, Pd, isopen, Rd, tol)
     end
 end
-Fd(F::AEDPCW{Dim3}, ε::Vector{Float64}, Tr::Vector{Bool}) = begin
-     # TODO
-    [- ε' * F.C0 * Sn(F.cracks[i], key, F.cn, F.ct) * F.C0 * ε / 2 for (i, key) in enumerate(ckeys)]
-
-end
-
 
 function constitutive_law_apply!(F::AEDPCW{T}, p::AbstractPoint{<:AbstractCellType, T}; before_gradient::Union{Nothing, Bool}=nothing) where T<:Dim3
     if isnothing(before_gradient) || before_gradient
         d_old = p.statev[F.x]
         ε = p.ε + p.dε
-        stats = F.isopen(p.D * ε) # Vector{Bool} indicate is microcrack open or not
-        Tr = [F.Tr[stats[i]](F.cracks[i]) for i in 1:F.n] # FIXME
         d(x) = d_old + x # vector -> vector
+        stats = F.isopen(p.D * ε) # Vector{Bool} indicate is microcrack open or not
+        Tr = [F.Tr_gen(crack, stats[i]) for (i, crack) in enumerate(F.cracks)]
         Cd(x) = sum(d(x) .* Tr) # vector -> matrix
         B(x) = (Mandel.I + F.Pd * Cd(x)) \ F.Pd # vector -> matrix
-        Fd(x) = begin
-            # vector -> vector
-            CdB(x) = 2 * B(x) * Cd(x) - Mandel.I
-            o = zeros(F.n)
-            Threads.@threads for i in eachindex(Tr)
-                o[i] = -ε'*Tr[i]*CdB(x)*ε/2
-            end
-            o
-        end
-
+        CdB(x) = 2 * B(x) * Cd(x) - Mandel.I # vector -> matrix
+        Fd(x) = [-ε'*Tr[i]*CdB(x)*ε/2 for i in 1:F.n]
         g(x) = Fd(x) - Rd(F.Rd, d(x)) # vector -> vector
         if sum( g(zeros(F.n)) .> F.tol ) >= 1
             Δd = NCP_desent(g, F.n)#optim(g) # TODO
@@ -407,7 +390,7 @@ function constitutive_law_apply!(F::AEDPCW{T}, p::AbstractPoint{<:AbstractCellTy
         d = p.statev[F.x]
         ε = p.ε + p.dε
         stats = F.isopen(p.D * ε) # Vector{Bool} indicate is microcrack open or not
-        Tr = [F.Tr[stats[i]](F.cracks[i]) for i in 1:F.n] # FIXMTE
+        Tr = [F.Tr_gen(crack, stats[i]) for (i, crack) in enumerate(F.cracks)]
         cd = sum(d .* Tr)
         b = (Mandel.I + F.Pd * cd) \ F.Pd
         Chom = F.C0 - cd + cd * b * cd
