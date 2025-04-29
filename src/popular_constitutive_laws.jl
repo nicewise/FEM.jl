@@ -81,43 +81,121 @@ function constitutive_law_apply!(F::vm_iso{T}, p::AbstractPoint{<:AbstractCellTy
 end
 
 abstract type AbstractRd end
+
 struct R1 <: AbstractRd
     rc::Float64
     dc::Float64
 end
-Rd(R::R1, d) = 4d .* R.dc * R.rc ./ (d .+ R.dc) .^ 2
+
 struct R2 <: AbstractRd
     n::Real
     rc::Float64
     dc::Float64
 end
-#Rd(R::R2, d) = d*R.n*R.rc / (R.dc*(R.n - 1 + (d/R.dc)^R.n))
-Rd(R::R2, d) = d .* R.n * R.rc ./ (R.dc * (R.n - 1 .+ (d ./ R.dc) .^ R.n))
 
 struct R3 <: AbstractRd
     rc::Float64
     dc::Float64
 end
-#Rd(R::R3, d) = d * R.rc * exp(1 - d/R.dc) / R.dc
-Rd(R::R3, d) = d .* R.rc .* exp.(1 .- d ./ R.dc) ./ R.dc
 
 struct R4 <: AbstractRd
     # 线性
     c0::Float64
     c1::Float64
 end
-#Rd(R::R4, d) = R.c0 + R.c1 * d
-Rd(R::R4, d) = R.c0 .+ R.c1 .* d
 
-function Rd_gen(filter::Int, p::Float64...)
-    R_map = Dict(
-        1 => R1(p[1], p[2]),
-        #2 => R2(p[1], p[2], p[3]),
-        3 => R3(p[1], p[2]),
-        4 => R4(p[1], p[2])
-    )
-    return R_map[filter]
+const RD_TYPES = Dict(
+    1 => (R1, 2),
+    2 => (R2, 3),
+    3 => (R3, 2),
+    4 => (R4, 2)
+)
+
+function Rd_gen(filter::Int, p::Real...)
+    # 检查filter有效性
+    if !haskey(RD_TYPES, filter)
+        throw(ArgumentError("Invalid filter: $filter. Valid options: $(keys(RD_TYPES))"))
+    end
+
+    # 获取目标类型及参数数量
+    type_def, n_params = RD_TYPES[filter]
+
+    # 校验参数数量
+    if length(p) != n_params
+        throw(ArgumentError("Filter $filter requires $n_params parameters, got $(length(p))"))
+    end
+
+    # 转换类型并构造对象
+    return type_def([Float64(x) for x in p]...)
 end
+
+function _Rd(R::R1, d)
+    @. 4 * R.dc * R.rc * d / (d + R.dc)^2
+end
+
+function _Rd(R::R2, d)
+    n, rc, dc = R.n, R.rc, R.dc
+    @. (d * n * rc) / (dc * (n - 1 + (d/dc)^n))
+end
+
+function _Rd(R::R3, d)
+    @. d * R.rc * exp(1 - d/R.dc) / R.dc
+end
+
+function _Rd(R::R4, d)
+    @. R.c0 + R.c1 * d
+end
+
+# 标量版本
+Rd(R::AbstractRd, d::Real) = _Rd(R, d)
+
+# 带权重的数组版本
+function Rd(R::AbstractRd, d::AbstractArray, ω::AbstractArray)
+    @assert length(d) == length(ω) "维数不匹配"
+    return _Rd(R, d) .* ω
+end
+
+# === 每种类型的导数 ===
+#TODO chatgpt生成代码，未检查导数是否正确
+function _dRd(R::R1, d)
+    rc, dc = R.rc, R.dc
+    @. 4 * dc * rc * (dc - d) / (d + dc)^3
+end
+
+function _dRd(R::R2, d)
+    n, rc, dc = R.n, R.rc, R.dc
+    @. begin
+        a = (d / dc)^n
+        num = n * rc * (n - 1 + a - n * a)
+        den = dc * (n - 1 + a)^2
+        num / den
+    end
+end
+
+function _dRd(R::R3, d)
+    rc, dc = R.rc, R.dc
+    @. rc * exp(1 - d/dc) * (1 - d/dc) / dc
+end
+
+function _dRd(R::R4, d)
+    @. R.c1
+end
+
+# 标量输入
+dRd(R::AbstractRd, d::Real) = _dRd(R, d)
+
+# 向量输入，必须带权重，输出对角矩阵
+function dRd(R::AbstractRd, d::AbstractVector, ω::AbstractVector)
+    @assert length(d) == length(ω) "维数不匹配"
+    v = _dRd(R, d) .* ω
+    return Diagonal(v)
+end
+
+# 捕捉非法调用（向量输入但无权重）
+function dRd(R::AbstractRd, d::AbstractVector)
+    throw(ArgumentError("向量输入时必须提供权重向量 ω"))
+end
+
 
 #FIXME delute跑不出正确的本构曲线
 # 对于pcw，体积模量和剪切模量不劣化到小于0已经解决了问题
@@ -338,6 +416,7 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
     x::Vector{Int}
     y::Vector{Int}
     n::Int # 代表性裂隙族数量，ie. 球面积分高斯点数目
+    ω::Vector{Float64}
     cracks::Vector{MicroCrack}
     C0::SMatrix{6, 6, Float64}
     Tr_gen::Function
@@ -363,7 +442,7 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
         αμ = (2k3 + 6μ2) / 5(k3 + 2μ2) / μ2
         Pd = αk * Mandel.J + αμ * Mandel.K
         isopen = σ -> [σ' * crack.N for crack in cracks] .>= 0 # σ -> vector{Bool}
-        return new{T}(l, x, y, n, cracks, C0, Tr_gen, Pd, isopen, Rd, tol)
+        return new{T}(l, x, y, n, dnw[:, 4], cracks, C0, Tr_gen, Pd, isopen, Rd, tol)
     end
 end
 
@@ -376,9 +455,25 @@ function constitutive_law_apply!(F::AEDPCW{T}, p::AbstractPoint{<:AbstractCellTy
         Tr = [F.Tr_gen(crack, stats[i]) for (i, crack) in enumerate(F.cracks)]
         Cd(x) = sum(d(x) .* Tr) # vector -> matrix
         B(x) = (Mandel.I + F.Pd * Cd(x)) \ F.Pd # vector -> matrix
-        CdB(x) = 2 * B(x) * Cd(x) - Mandel.I # vector -> matrix
-        Fd(x) = [-ε'*Tr[i]*CdB(x)*ε/2 for i in 1:F.n]
+        BCd2(x) = 2 * B(x) * Cd(x) - Mandel.I # vector -> matrix
+        Fd(x) = [-ε'*Tr[i]*BCd2(x)*ε/2 for i in 1:F.n]
         g(x) = Fd(x) - Rd(F.Rd, d(x)) # vector -> vector
+
+        CdB(x) = Mandel.I - Cd(x) * B(x)
+        BCd(x) = Cd(x) * B(x) - Mandel.I
+        function dFd(x)
+            o = zeros(F.n, F.n)
+            for i in 1:F.n
+                o[i, i] = dFd_val(Tr[i], Tr[i]) / 2
+                for j in i+1:n
+                    o[i, j] = dFd_val(Tr[j], Tr[i])
+                end
+            end
+            return (o + o')
+        end
+        dFd_val(x, Tj, Ti) = -ε'*CdB(x)*(Tj*B(x)*Ti)*BCd(x)*ε #TODO
+
+        g∂d = dFd(d_old) - dRd(F.Rd, d_old)
         if sum( g(zeros(F.n)) .> F.tol ) >= 1
             Δd = NCP_desent(g, F.n)#optim(g) # TODO
             d_old = d(Δd)
