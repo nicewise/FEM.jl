@@ -410,6 +410,24 @@ function constitutive_law_apply!(F::AEDDELUTE{T}, p::AbstractPoint{<:AbstractCel
     return nothing
 end
 
+struct LCP
+    n::Int
+    model
+    function LCP(n) # n denotes the number of variables
+        model = Model(PATHSolver.Optimizer)
+        #set_optimizer_attribute(model, "output", "no")
+        set_optimizer_attribute(model, "silent", true)
+        # without this option set to "true"
+        # PATHSolver will print a lot of information to stdout
+        return new(n, model)
+    end
+end
+function LCP_solve(lcp::LCP, M, q)
+    @variable(lcp.model, x[1:n] >= 0)
+    @constraint(lcp.model, M * x .+ q ⟂ x)
+    optimize!(lcp.model)
+    return(value.(x)) # obtain solution
+end
 
 struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
     l::Float64
@@ -424,6 +442,7 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
     isopen::Function
     Rd::AbstractRd
     tol::Float64
+    lcp::LCP
     function AEDPCW{T}(E::Float64, ν::Float64, Rd::AbstractRd; tol::Float64 = 1e-6, l::Float64 = 0., n::Int) where T
         x = collect(1:n)
         y = collect(n+1:2n)
@@ -442,7 +461,8 @@ struct AEDPCW{T<:Dim3} <: AbstractConstitutiveLaw{T}
         αμ = (2k3 + 6μ2) / 5(k3 + 2μ2) / μ2
         Pd = αk * Mandel.J + αμ * Mandel.K
         isopen = σ -> [σ' * crack.N for crack in cracks] .>= 0 # σ -> vector{Bool}
-        return new{T}(l, x, y, n, dnw[:, 4], cracks, C0, Tr_gen, Pd, isopen, Rd, tol)
+        lcp = LCP(n)
+        return new{T}(l, x, y, n, dnw[:, 4], cracks, C0, Tr_gen, Pd, isopen, Rd, tol, lcp)
     end
 end
 
@@ -474,8 +494,10 @@ function constitutive_law_apply!(F::AEDPCW{T}, p::AbstractPoint{<:AbstractCellTy
         dFd_val(x, Tj, Ti) = -ε'*CdB(x)*(Tj*B(x)*Ti)*BCd(x)*ε #TODO
 
         g∂d = dFd(d_old) - dRd(F.Rd, d_old)
-        if sum( g(zeros(F.n)) .> F.tol ) >= 1
-            Δd = NCP_desent(g, F.n)#optim(g) # TODO
+        g_penetrator = g(zeros(F.n))
+        if sum( g_penetrator .> F.tol ) >= 1
+            #Δd = NCP_desent(g, F.n)#optim(g) # TODO
+            Δd = LCP_solve(F.lcp, g∂d, g_penetrator)
             d_old = d(Δd)
         end
         p.statev[F.x] .= d_old

@@ -2,6 +2,7 @@ module FEM
 using LinearAlgebra, SparseArrays, StaticArrays
 using Base.Threads
 import ScatteredInterpolation, JLD2, Roots
+using JuMP, PATHSolver
 
 include("types.jl")
 export
