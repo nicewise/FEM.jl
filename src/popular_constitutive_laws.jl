@@ -423,7 +423,7 @@ struct LCP
     end
 end
 function LCP_solve(lcp::LCP, M, q)
-    @variable(lcp.model, x[1:n] >= 0)
+    x = @variable(lcp.model, [1:lcp.n], lower_bound = 0)
     @constraint(lcp.model, M * x .+ q ⟂ x)
     optimize!(lcp.model)
     return(value.(x)) # obtain solution
@@ -477,23 +477,23 @@ function constitutive_law_apply!(F::AEDPCW{T}, p::AbstractPoint{<:AbstractCellTy
         B(x) = (Mandel.I + F.Pd * Cd(x)) \ F.Pd # vector -> matrix
         BCd2(x) = 2 * B(x) * Cd(x) - Mandel.I # vector -> matrix
         Fd(x) = [-ε'*Tr[i]*BCd2(x)*ε/2 for i in 1:F.n]
-        g(x) = Fd(x) - Rd(F.Rd, d(x)) # vector -> vector
+        g(x) = Fd(x) - Rd(F.Rd, d(x), F.ω) # vector -> vector
 
         CdB(x) = Mandel.I - Cd(x) * B(x)
         BCd(x) = Cd(x) * B(x) - Mandel.I
         function dFd(x)
             o = zeros(F.n, F.n)
             for i in 1:F.n
-                o[i, i] = dFd_val(Tr[i], Tr[i]) / 2
-                for j in i+1:n
-                    o[i, j] = dFd_val(Tr[j], Tr[i])
+                o[i, i] = dFd_val(x, Tr[i], Tr[i]) / 2
+                for j in i+1:F.n
+                    o[i, j] = dFd_val(x, Tr[j], Tr[i])
                 end
             end
             return (o + o')
         end
         dFd_val(x, Tj, Ti) = -ε'*CdB(x)*(Tj*B(x)*Ti)*BCd(x)*ε #TODO
 
-        g∂d = dFd(d_old) - dRd(F.Rd, d_old)
+        g∂d = dFd(d_old) - dRd(F.Rd, d_old, F.ω)
         g_penetrator = g(zeros(F.n))
         if sum( g_penetrator .> F.tol ) >= 1
             #Δd = NCP_desent(g, F.n)#optim(g) # TODO

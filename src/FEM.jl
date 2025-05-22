@@ -81,6 +81,7 @@ export
     AbstractRd,
     Rd_gen,
     Rd,
+    dRd,
     elastic_damage,
     AEDDELUTE,
     AEDPCW
