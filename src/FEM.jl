@@ -2,6 +2,7 @@ module FEM
 using LinearAlgebra, SparseArrays, StaticArrays
 using Base.Threads
 import ScatteredInterpolation, JLD2, Roots
+using JuMP, PATHSolver
 
 include("types.jl")
 export
@@ -30,7 +31,10 @@ export
     AbstractRecorder
 
 include("MandelNotation.jl")
-export  Mandel # some constant tensor
+export
+    Mandel, # some constant tensor
+    ⊗,
+    ⋆
 
 include("mesh.jl")
 export
@@ -45,7 +49,8 @@ export
 
 include("quadrature.jl")
 export
-    quad_form
+    quad_form,
+    sphere_quad
 
 include("linear_elastic_fem.jl")
 export
@@ -76,10 +81,10 @@ export
     AbstractRd,
     Rd_gen,
     Rd,
+    dRd,
     elastic_damage,
-    gradient_elastic_damage,
-    before_gradient!,
-    after_gradient!
+    AEDDELUTE,
+    AEDPCW
 
 include("solvers.jl")
 
