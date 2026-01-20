@@ -97,6 +97,7 @@ export
     testcon, # <: AbstractRecorder
     testcon!,
     fem_recorder, # <: AbstractRecorder
+    fun_recorder, # <: AbstractRecorder
     displacement_control!,
     gradient_displacement_control!
 

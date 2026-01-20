@@ -47,6 +47,22 @@ simple_analysis(fixed_dofs, load_dofs, load_value, dofs; solver = LeftDivisionSo
                     tolerance)
 end
 
+mutable struct fun_recorder <: AbstractRecorder
+    obs::Dict{Symbol, Function} #observations
+    data::Dict{Symbol, Any}
+    iteration::Vector{Int}
+    time::Vector{Float64}
+end
+function fun_recorder(obs::Dict{Symbol,Function})
+    data = Dict{Symbol,Any}(k => Any[] for k in keys(obs))
+    return fun_recorder(obs, data, Int[], Float64[])
+end
+function record!(rc::fun_recorder, p::AbstractPoint)
+    for (k, f) in rc.obs
+        push!(rc.data[k], f(p))
+    end
+    return nothing
+end
 
 mutable struct testcon <: AbstractRecorder
     σ::Vector{Vector{Float64}}
