@@ -1,6 +1,45 @@
 # MandelNotation.jl
 # encoding: utf-8
 
+@doc raw"""
+两向量的并矢
+```math
+a_ib_j = \begin{bmatrix}
+a_1b_1&a_1b_2&a_1b_3\\
+a_2b_1&a_2b_2&a_2b_3\\
+a_3b_1&a_3b_2&a_3b_3
+\end{bmatrix}
+```
+如果这个二阶张量是对称的话，则可以降阶为：
+```math
+a_ib_j = \begin{bmatrix}
+a_1b_1\\
+a_2b_2\\
+a_3b_3\\
+\sqrt{2}a_2b_3\\
+\sqrt{2}a_3b_1\\
+\sqrt{2}a_1b_2
+\end{bmatrix}
+```
+
+由两个向量构件二阶对称张量：
+```math
+a\otimes^sb = \frac{1}{2}(a\otimes b+b\otimes a)
+=\frac{1}{2}\begin{bmatrix}
+a_1b_1+a_1b_1&a_1b_2+a_2b_1&a_1b_3+a_3b_1\\
+a_2b_1+a_1b_2&a_2b_2+a_2b_2&a_2b_3+a_3b_2\\
+a_3b_1+a_1b_3&a_3b_2+a_2b_3&a_3b_3+a_3b_3
+\end{bmatrix}\overset{\text{降阶}}{=}
+\frac{1}{2}\begin{bmatrix}
+a_1b_1+a_1b_1\\
+a_2b_2+a_2b_2\\
+a_3b_3+a_3b_3\\
+\sqrt{2}(a_2b_3+a_3b_2)\\
+\sqrt{2}(a_3b_1+a_1b_3)\\
+\sqrt{2}(a_1b_2+a_2b_1)
+\end{bmatrix}
+```
+"""
 function ⊗(a::SVector{3}, b::SVector{3}; symmetric::Bool = false)
     if symmetric
         return (a ⊗ b + b ⊗ a) / 2
@@ -44,6 +83,7 @@ function ⊗(A::SVector{6}, B::SVector{6}; symmetric::Bool = false)
         return A * B'
     end
 end
+⋆(A::SVector{3}, B::SVector{3}) = ⊗(A, B, symmetric = true) # ⊗s
 ⋆(A::SVector{6}, B::SVector{6}) = ⊗(A, B, symmetric = true) # ⊗s
 
 struct MandelNotation
