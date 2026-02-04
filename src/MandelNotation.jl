@@ -83,8 +83,8 @@ function ⊗(A::SVector{6}, B::SVector{6}; symmetric::Bool = false)
         return A * B'
     end
 end
-⋆(A::SVector{3}, B::SVector{3}) = ⊗(A, B, symmetric = true) # ⊗s
-⋆(A::SVector{6}, B::SVector{6}) = ⊗(A, B, symmetric = true) # ⊗s
+⊗ˢ(A::SVector{3}, B::SVector{3}) = ⊗(A, B, symmetric = true)
+⊗ˢ(A::SVector{6}, B::SVector{6}) = ⊗(A, B, symmetric = true)
 
 struct MandelNotation
     δ::SVector{6}

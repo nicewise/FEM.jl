@@ -326,8 +326,8 @@ struct MicroCrack
             N,
             T ⊗ T / 2,
             N ⊗ N,
-            T ⋆ T - T ⊗ T / 2, # ⋆ = ⊗s
-            N ⋆ T + T ⋆ N,
+            T ⊗ˢ T - T ⊗ T / 2,
+            N ⊗ˢ T + T ⊗ˢ N,
             N ⊗ T,
             T ⊗ N
         )

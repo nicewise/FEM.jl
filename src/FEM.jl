@@ -34,7 +34,7 @@ include("MandelNotation.jl")
 export
     Mandel, # some constant tensor
     ⊗,
-    ⋆
+    ⊗ˢ
 
 include("mesh.jl")
 export
